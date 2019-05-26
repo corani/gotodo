@@ -1,0 +1,8 @@
+{
+    "include": [ "~/Projects/Go/**/*.go" ],
+    "exclude": [],
+    "patterns": [ "NOTE", "TODO", "FIXME" ],
+    "assignee": "daniel",
+    "format": "error",
+    "output": ""
+}
