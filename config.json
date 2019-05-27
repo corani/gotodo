@@ -1,8 +1,10 @@
 {
-    "include": [ "~/Projects/Go/**/*.go" ],
+    "include": [ "~/go/src" ],
     "exclude": [],
     "patterns": [ "NOTE", "TODO", "FIXME" ],
     "assignee": "daniel",
+    "includeUnassigned": false,
     "format": "error",
-    "output": ""
+    "output": "",
+    "relRoot": "~/go/src/"
 }
