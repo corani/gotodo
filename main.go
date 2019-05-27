@@ -45,7 +45,7 @@ func main() {
 	// TODO(daniel): Use include/exclude patterns here. Since the Go standard library doesn't support
 	// double-star globs, we need to write our own matcher here.
 	var paths []string
-	filepath.Walk("/home/daniel/go/src", func(path string, info os.FileInfo, err error) error {
+	filepath.Walk("/home/dbos/go/src", func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -56,15 +56,15 @@ func main() {
 	})
 
 	for _, path := range paths {
-		fset := token.NewFileSet()
-		ast, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+		fs := token.NewFileSet()
+		ast, err := parser.ParseFile(fs, path, nil, parser.ParseComments)
 		if err != nil {
 			log.Printf("unable to parse '%s': %v\n", path, err)
 		}
 
 		for _, cg := range ast.Comments {
 			found := false
-			comments := getCommentLines(cg)
+			comments := getCommentLines(fs, cg)
 			for _, c := range comments {
 				// TODO(daniel): Support having more than one match within the same comment group
 				if !found {
@@ -79,7 +79,8 @@ func main() {
 				// we could print a few code-lines, as the comments might not always make sense otherwise
 				// TODO(daniel): Do we need some kind of intermediate representation, before we output?
 				if found {
-					log.Printf("%s:%d %s", path, c.Slash, c.Text)
+					pos := fs.PositionFor(c.Slash, false)
+					log.Printf("%s %s", pos, c.Text)
 				}
 			}
 		}
@@ -88,13 +89,16 @@ func main() {
 	// TODO(daniel) Output formatters, "error", "json", "..."?
 }
 
-func getCommentLines(cg *ast.CommentGroup) []*ast.Comment {
+func getCommentLines(fs *token.FileSet, cg *ast.CommentGroup) []*ast.Comment {
 	var result []*ast.Comment
 	for _, c := range cg.List {
 		// NOTE(daniel): Windows/Mac line endings (\r) will be removed later, so no need to consider them here
 		parts := strings.Split(c.Text, "\n")
-		line := c.Slash
+		file := fs.File(c.Slash)
+		offset := file.Offset(c.Slash)
 		for _, s := range parts {
+			pos := file.Pos(offset)
+			offset += len(s)
 			if strings.HasPrefix(s, "//") || strings.HasPrefix(s, "/*") {
 				s = s[2:]
 			}
@@ -104,10 +108,9 @@ func getCommentLines(cg *ast.CommentGroup) []*ast.Comment {
 			s := strings.Trim(s, " \r\t")
 
 			result = append(result, &ast.Comment{
-				Slash: line,
+				Slash: pos,
 				Text:  s,
 			})
-			line++
 		}
 	}
 	return result
