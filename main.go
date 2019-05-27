@@ -13,6 +13,9 @@ import (
 	"strings"
 )
 
+/*
+TODO(daniel) Don't use `log` for output, just `fmt.Printf` instead.
+*/
 type Config struct {
 	Patterns []string `json:"patterns"`
 	Assignee string   `json:"assignee"`
@@ -71,6 +74,7 @@ func main() {
 					for _, pattern := range config.Patterns {
 						// TODO(daniel): Extract assignee
 						if pos := strings.Index(c.Text, pattern); pos == 0 {
+							// TODO(daniel): Increment the c.Slash position, so we land exactly on the pattern (skip e.g. "// ")
 							found = true
 						}
 					}
@@ -78,6 +82,8 @@ func main() {
 				// TODO(daniel): Is there some way to get the context of the comment group? It would be nice if
 				// we could print a few code-lines, as the comments might not always make sense otherwise
 				// TODO(daniel): Do we need some kind of intermediate representation, before we output?
+				// TODO(daniel): Only report the position for the first line (containing the pattern), not for the following lines
+				// TODO(daniel): Truncate the path prefix (perhaps based on a config value) or make it relative?
 				if found {
 					pos := fs.PositionFor(c.Slash, false)
 					log.Printf("%s %s", pos, c.Text)
