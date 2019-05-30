@@ -22,6 +22,7 @@ import (
 /*
 TODO(daniel) Don't use `log` for output, just `fmt.Fprintf` instead, based on config.Output.
 */
+
 type Config struct {
 	Patterns          []string `json:"patterns"`
 	Assignee          string   `json:"assignee"`
@@ -262,6 +263,7 @@ func outputFormatError(config Config, comments []Comment) {
 			}
 			nocol.Println("\t" + line)
 		}
+		nocol.Println()
 	}
 }
 
