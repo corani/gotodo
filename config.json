@@ -6,5 +6,6 @@
     "includeUnassigned": true,
     "format": "error",
     "output": "",
+    "contextLines": 5,
     "relRoot": "$GOPATH/src/"
 }

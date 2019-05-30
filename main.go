@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"go/ast"
+	"go/format"
 	"go/parser"
 	"go/token"
 	"io/ioutil"
@@ -29,6 +31,7 @@ type Config struct {
 	Format            string   `json:"format"`
 	Output            string   `json:"output"`
 	RelRoot           string   `json:"relRoot"`
+	ContextLines      int      `json:"contextLines"`
 }
 
 type Comment struct {
@@ -96,17 +99,29 @@ func main() {
 
 	for _, path := range paths {
 		fs := token.NewFileSet()
-		ast, err := parser.ParseFile(fs, path, nil, parser.ParseComments)
+		f, err := parser.ParseFile(fs, path, nil, parser.ParseComments)
 		if err != nil {
 			log.Printf("unable to parse '%s': %v\n", path, err)
 		}
+		cmap := ast.NewCommentMap(fs, f, f.Comments)
 
 		comment := Comment{}
-		for _, cg := range ast.Comments {
+		for _, cg := range f.Comments {
 			if comment.Filename != "" {
 				comments = append(comments, comment)
 				comment = Comment{}
 			}
+
+			// NOTE(daniel) Find the context of the comment group
+			var node ast.Node
+			for cm_node, cm_cgs := range cmap {
+				for _, cm_cg := range cm_cgs {
+					if cm_cg == cg {
+						node = cm_node
+					}
+				}
+			}
+
 			for _, c := range getCommentLines(fs, cg) {
 				for _, pattern := range config.Patterns {
 					if i := strings.Index(c.Text, pattern); i == 0 {
@@ -125,6 +140,18 @@ func main() {
 							Type:     pattern,
 						}
 
+						// NOTE(daniel) Store the context of the comment group
+						if node != nil {
+							var buf bytes.Buffer
+							if err := format.Node(&buf, fs, node); err == nil {
+								lines := strings.Split(buf.String(), "\n")
+
+								// TODO(daniel) Sometimes the node that's found actually contains the comment-group.
+								// This leads to duplicate output, so we need to find a way to avoid that.
+								comment.Context = stripComments(lines)
+							}
+						}
+
 						re := regexp.MustCompile(pattern + `\(([^\)]+)\)(.*)`)
 						match := re.FindSubmatch([]byte(c.Text))
 						if match != nil {
@@ -140,8 +167,6 @@ func main() {
 				if comment.Filename != "" {
 					comment.Text = append(comment.Text, strings.TrimSpace(c.Text))
 				}
-				// TODO(daniel): Is there some way to get the context of the comment group? It would be nice if
-				// we could print a few code-lines, as the comments might not always make sense otherwise
 			}
 		}
 	}
@@ -151,10 +176,36 @@ func main() {
 	// TODO(daniel) Output formatters, "error", "json", "..."?
 	switch config.Format {
 	case "error":
-		outputFormatError(comments)
+		outputFormatError(config, comments)
 	default:
 		log.Printf("Unsupported formatter: '%s'\n", config.Format)
 	}
+}
+
+func stripComments(lines []string) []string {
+	var result []string
+
+	blockComment := false
+	for _, line := range lines {
+		if blockComment {
+			if end := strings.Index(line, "*/"); end >= 0 {
+				line = line[end+2:]
+				blockComment = false
+			} else {
+				continue
+			}
+		} else {
+			if start := strings.Index(line, "/*"); start >= 0 {
+				line = line[:start]
+				blockComment = true
+			}
+		}
+		if strings.TrimSpace(line) == "" || strings.HasPrefix(strings.TrimSpace(line), "//") {
+			continue
+		}
+		result = append(result, line)
+	}
+	return result
 }
 
 func filterByAssignee(comments []Comment, assignee string, includeUnassigned bool) []Comment {
@@ -181,12 +232,13 @@ func filterByAssignee(comments []Comment, assignee string, includeUnassigned boo
 	return result
 }
 
-func outputFormatError(comments []Comment) {
+func outputFormatError(config Config, comments []Comment) {
 	// TODO(daniel) make colors dynamic
 	bold := color.New(color.Bold).SprintFunc()
 	underline := color.New(color.Underline).SprintFunc()
+	nocol := color.New(color.FgWhite)
 	for _, comment := range comments {
-		var col *color.Color
+		col := nocol
 		switch comment.Type {
 		case "NOTE":
 			col = color.New(color.FgHiGreen)
@@ -202,7 +254,13 @@ func outputFormatError(comments []Comment) {
 		}
 		col.Printf("%s:%d:%d %s\n", comment.Filename, comment.Line, comment.Col, bold(tag))
 		for _, line := range comment.Text {
-			col.Println("\t" + line)
+			col.Println("\t// " + line)
+		}
+		for i, line := range comment.Context {
+			if i > config.ContextLines {
+				break
+			}
+			nocol.Println("\t" + line)
 		}
 	}
 }
