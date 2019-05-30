@@ -3,7 +3,7 @@
     "exclude": [],
     "patterns": [ "NOTE", "TODO", "FIXME" ],
     "assignee": "daniel",
-    "includeUnassigned": false,
+    "includeUnassigned": true,
     "format": "error",
     "output": "",
     "relRoot": "$GOPATH/src/"

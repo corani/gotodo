@@ -129,8 +129,11 @@ func main() {
 						match := re.FindSubmatch([]byte(c.Text))
 						if match != nil {
 							comment.Assignee = strings.ToLower(string(match[1]))
-							c.Text = strings.TrimPrefix(string(match[2]), ":")
+							c.Text = string(match[2])
+						} else {
+							c.Text = c.Text[len(pattern):]
 						}
+						c.Text = strings.TrimPrefix(c.Text, ":")
 					}
 				}
 
