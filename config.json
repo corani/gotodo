@@ -1,10 +1,10 @@
 {
-    "include": [ "~/go/src" ],
+    "include": [ "$GOPATH/src/github.com/corani" ],
     "exclude": [],
     "patterns": [ "NOTE", "TODO", "FIXME" ],
     "assignee": "daniel",
     "includeUnassigned": false,
     "format": "error",
     "output": "",
-    "relRoot": "~/go/src/"
+    "relRoot": "$GOPATH/src/"
 }

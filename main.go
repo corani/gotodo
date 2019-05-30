@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -11,6 +10,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/fatih/color"
@@ -18,7 +18,7 @@ import (
 )
 
 /*
-TODO(daniel) Don't use `log` for output, just `fmt.Printf` instead.
+TODO(daniel) Don't use `log` for output, just `fmt.Fprintf` instead, based on config.Output.
 */
 type Config struct {
 	Patterns          []string `json:"patterns"`
@@ -29,6 +29,16 @@ type Config struct {
 	Format            string   `json:"format"`
 	Output            string   `json:"output"`
 	RelRoot           string   `json:"relRoot"`
+}
+
+type Comment struct {
+	Filename string
+	Line     uint
+	Col      uint
+	Type     string
+	Assignee string
+	Text     []string
+	Context  []string
 }
 
 func main() {
@@ -58,6 +68,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("unable to expand homedir: %v", err)
 		}
+		path = os.ExpandEnv(path)
 
 		// TODO(daniel): Use include/exclude patterns here. Since the Go standard library doesn't support
 		// double-star globs, we need to write our own matcher here.
@@ -78,7 +89,10 @@ func main() {
 		if err != nil {
 			log.Fatalf("unable to expand homedir: %v", err)
 		}
+		root = os.ExpandEnv(root)
 	}
+
+	var comments []Comment
 
 	for _, path := range paths {
 		fs := token.NewFileSet()
@@ -87,61 +101,107 @@ func main() {
 			log.Printf("unable to parse '%s': %v\n", path, err)
 		}
 
+		comment := Comment{}
 		for _, cg := range ast.Comments {
-			found := ""
-			first := true
-			comments := getCommentLines(fs, cg)
-		comment:
-			for _, c := range comments {
+			if comment.Filename != "" {
+				comments = append(comments, comment)
+				comment = Comment{}
+			}
+			for _, c := range getCommentLines(fs, cg) {
 				for _, pattern := range config.Patterns {
-					if pos := strings.Index(c.Text, pattern); pos == 0 {
-						// NOTE(daniel) If an Assignee has been set, skip all comments that have a different
-						// assignee (but include ones without an assignee, if requested).
-						if !strings.HasPrefix(c.Text, pattern+"(") {
-							if !config.IncludeUnassigned {
-								continue comment
-							}
-						} else if config.Assignee != "" {
-							if !strings.HasPrefix(c.Text, fmt.Sprintf("%s(%s)", pattern, config.Assignee)) {
-								continue comment
-							}
+					if i := strings.Index(c.Text, pattern); i == 0 {
+						if comment.Filename != "" {
+							comments = append(comments, comment)
 						}
-						found = pattern
-						first = true
+
+						pos := fs.PositionFor(c.Slash, false)
+						if root != "" {
+							pos.Filename, _ = filepath.Rel(root, pos.Filename)
+						}
+						comment = Comment{
+							Filename: pos.Filename,
+							Line:     uint(pos.Line),
+							Col:      uint(pos.Column),
+							Type:     pattern,
+						}
+
+						re := regexp.MustCompile(pattern + `\(([^\)]+)\)(.*)`)
+						match := re.FindSubmatch([]byte(c.Text))
+						if match != nil {
+							comment.Assignee = strings.ToLower(string(match[1]))
+							c.Text = strings.TrimPrefix(string(match[2]), ":")
+						}
 					}
+				}
+
+				if comment.Filename != "" {
+					comment.Text = append(comment.Text, strings.TrimSpace(c.Text))
 				}
 				// TODO(daniel): Is there some way to get the context of the comment group? It would be nice if
 				// we could print a few code-lines, as the comments might not always make sense otherwise
-				// TODO(daniel): Do we need some kind of intermediate representation, before we output?
-				// TODO(daniel) highlight the pattern
-				// TODO(daniel) make colors dynamic
-				if found != "" {
-					var col *color.Color
-					switch found {
-					case "NOTE":
-						col = color.New(color.FgHiGreen)
-					case "TODO":
-						col = color.New(color.FgHiYellow)
-					case "FIXME":
-						col = color.New(color.FgHiRed)
-					}
-
-					pos := fs.PositionFor(c.Slash, false)
-					if root != "" {
-						pos.Filename, _ = filepath.Rel(root, pos.Filename)
-					}
-					if first {
-						first = false
-						col.Printf("%s %s\n", pos, c.Text)
-					} else {
-						col.Printf("%*s %s\n", len(fmt.Sprintf("%s", pos)), "", c.Text)
-					}
-				}
 			}
 		}
 	}
 
+	comments = filterByAssignee(comments, config.Assignee, config.IncludeUnassigned)
+
 	// TODO(daniel) Output formatters, "error", "json", "..."?
+	switch config.Format {
+	case "error":
+		outputFormatError(comments)
+	default:
+		log.Printf("Unsupported formatter: '%s'\n", config.Format)
+	}
+}
+
+func filterByAssignee(comments []Comment, assignee string, includeUnassigned bool) []Comment {
+	var result []Comment
+
+	// NOTE(daniel) Check for assignee needs to be case-insensitive. Assignee in comment has been
+	// lower-cased already.
+	assignee = strings.ToLower(assignee)
+
+	for _, comment := range comments {
+		// NOTE(daniel) If an Assignee has been set, skip all comments that have a different
+		// assignee (but include ones without an assignee, if requested).
+		if assignee == "" {
+			result = append(result, comment)
+		} else if comment.Assignee == "" {
+			if includeUnassigned {
+				result = append(result, comment)
+			}
+		} else if comment.Assignee == assignee {
+			result = append(result, comment)
+		}
+	}
+
+	return result
+}
+
+func outputFormatError(comments []Comment) {
+	// TODO(daniel) make colors dynamic
+	bold := color.New(color.Bold).SprintFunc()
+	underline := color.New(color.Underline).SprintFunc()
+	for _, comment := range comments {
+		var col *color.Color
+		switch comment.Type {
+		case "NOTE":
+			col = color.New(color.FgHiGreen)
+		case "TODO":
+			col = color.New(color.FgHiYellow)
+		case "FIXME":
+			col = color.New(color.FgHiRed)
+		}
+
+		tag := comment.Type
+		if comment.Assignee != "" {
+			tag = tag + "(" + underline(comment.Assignee) + ")"
+		}
+		col.Printf("%s:%d:%d %s\n", comment.Filename, comment.Line, comment.Col, bold(tag))
+		for _, line := range comment.Text {
+			col.Println("\t" + line)
+		}
+	}
 }
 
 func getCommentLines(fs *token.FileSet, cg *ast.CommentGroup) []*ast.Comment {
