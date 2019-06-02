@@ -7,6 +7,7 @@ import (
 type language string
 
 const (
+	// TODO(daniel) Support other languages besides go?
 	GoLang language = "golang"
 )
 
