@@ -10,12 +10,14 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/corani/gotodo/gotodo"
 )
 
 type GolangParser struct{}
 
-func (p *GolangParser) Parse(config *Config, path string) ([]Comment, error) {
-	var comments []Comment
+func (p *GolangParser) Parse(config *gotodo.Config, path string) ([]gotodo.Comment, error) {
+	var comments []gotodo.Comment
 	fs := token.NewFileSet()
 	f, err := parser.ParseFile(fs, path, nil, parser.ParseComments)
 	if err != nil {
@@ -23,11 +25,11 @@ func (p *GolangParser) Parse(config *Config, path string) ([]Comment, error) {
 	}
 	cmap := ast.NewCommentMap(fs, f, f.Comments)
 
-	comment := Comment{}
+	comment := gotodo.Comment{}
 	for _, cg := range f.Comments {
 		if comment.Filename != "" {
 			comments = append(comments, comment)
-			comment = Comment{}
+			comment = gotodo.Comment{}
 		}
 
 		// NOTE(daniel) Find the context of the comment group
@@ -51,7 +53,7 @@ func (p *GolangParser) Parse(config *Config, path string) ([]Comment, error) {
 					if config.RelRoot != "" {
 						pos.Filename, _ = filepath.Rel(config.RelRoot, pos.Filename)
 					}
-					comment = Comment{
+					comment = gotodo.Comment{
 						Filename: pos.Filename,
 						Line:     uint(pos.Line),
 						Col:      uint(pos.Column),
