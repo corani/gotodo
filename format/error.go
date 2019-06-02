@@ -14,16 +14,28 @@ func (f *ErrorFormatter) Format(comments []gotodo.Comment) {
 	bold := color.New(color.Bold).SprintFunc()
 	underline := color.New(color.Underline).SprintFunc()
 	nocol := color.New(color.FgWhite)
+
+	type summaryType struct {
+		format *color.Color
+		count  int
+	}
+	summary := map[string]summaryType{
+		"NOTE": summaryType{
+			format: color.New(color.FgHiGreen),
+		},
+		"TODO": summaryType{
+			format: color.New(color.FgHiYellow),
+		},
+		"FIXME": summaryType{
+			format: color.New(color.FgHiRed),
+		},
+	}
 	for _, comment := range comments {
-		col := nocol
-		switch comment.Type {
-		case "NOTE":
-			col = color.New(color.FgHiGreen)
-		case "TODO":
-			col = color.New(color.FgHiYellow)
-		case "FIXME":
-			col = color.New(color.FgHiRed)
-		}
+		entry := summary[comment.Type]
+		entry.count++
+		summary[comment.Type] = entry
+
+		col := entry.format
 
 		tag := comment.Type
 		if comment.Assignee != "" {
@@ -38,6 +50,17 @@ func (f *ErrorFormatter) Format(comments []gotodo.Comment) {
 				break
 			}
 			nocol.Println("\t" + line)
+		}
+		nocol.Println()
+	}
+
+	if len(summary) > 0 {
+		nocol.Printf("Summary: ")
+		separator := ""
+		for k, v := range summary {
+			nocol.Printf("%s", separator)
+			v.format.Printf("%s: %s", k, bold(v.count))
+			separator = " / "
 		}
 		nocol.Println()
 	}

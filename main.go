@@ -10,10 +10,6 @@ import (
 	"github.com/corani/gotodo/parser"
 )
 
-/*
-TODO(daniel) Don't use `log` for output, just `fmt.Fprintf` instead, based on config.Output.
-*/
-
 func main() {
 	configFile := flag.String("config", "", "Path to config file")
 

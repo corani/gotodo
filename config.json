@@ -5,7 +5,7 @@
     "assignee": "daniel",
     "includeUnassigned": true,
     "format": "error",
-    "output": "",
+    "output": "stdout",
     "contextLines": 5,
     "relRoot": "$GOPATH/src/"
 }
