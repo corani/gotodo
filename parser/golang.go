@@ -18,6 +18,7 @@ type GolangParser struct{}
 
 func (p *GolangParser) Parse(config *gotodo.Config, path string) ([]gotodo.Comment, error) {
 	var comments []gotodo.Comment
+
 	fs := token.NewFileSet()
 	f, err := parser.ParseFile(fs, path, nil, parser.ParseComments)
 	if err != nil {
@@ -81,6 +82,7 @@ func (p *GolangParser) Parse(config *gotodo.Config, path string) ([]gotodo.Comme
 						c.Text = c.Text[len(pattern):]
 					}
 					c.Text = strings.TrimPrefix(c.Text, ":")
+					break
 				}
 			}
 
@@ -88,6 +90,9 @@ func (p *GolangParser) Parse(config *gotodo.Config, path string) ([]gotodo.Comme
 				comment.Text = append(comment.Text, strings.TrimSpace(c.Text))
 			}
 		}
+	}
+	if comment.Filename != "" {
+		comments = append(comments, comment)
 	}
 	return comments, nil
 }
