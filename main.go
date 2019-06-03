@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log"
+	"os"
 
 	"github.com/corani/gotodo/format"
 	"github.com/corani/gotodo/glob"
@@ -42,4 +43,18 @@ func main() {
 
 	formatter := format.NewFormatter(config)
 	formatter.Format(comments)
+
+	// TODO(daniel) Make the return code configurable based on the pattern?
+	rc := 0
+loop:
+	for _, comment := range comments {
+		switch comment.Type {
+		case "TODO":
+			rc = 1
+		case "FIXME":
+			rc = 2
+			break loop
+		}
+	}
+	os.Exit(rc)
 }
