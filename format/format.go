@@ -20,6 +20,10 @@ func NewFormatter(config *gotodo.Config) Formatter {
 		return &ErrorFormatter{config: config}
 	case "json":
 		return &JsonFormatter{config: config}
+	case "xunit":
+		log.Fatalf("Unsupported formatter: '%s'\n", config.Format)
+	case "infrabox":
+		return &InfraboxFormatter{config: config}
 	default:
 		log.Fatalf("Unsupported formatter: '%s'\n", config.Format)
 	}
