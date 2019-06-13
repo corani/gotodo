@@ -12,47 +12,6 @@ type InfraboxFormatter struct {
 	config *gotodo.Config
 }
 
-/*
-{
-	"version": 1,
-	"title": "Gosec",
-	"elements": [
-		{
-			"type": "h1",
-			"text": "Gosec Report: 33 Issues"
-		},
-		{
-			"type": "table",
-			"rows": [
-				[
-					{
-						"type": "text",
-						"text": "Files",
-						"emphasis": "bold"
-					},
-					{
-						"type": "text",
-						"text": "33"
-					}
-				],
-				...
-			]
-		},
-		{
-			"type": "table",
-			"headers": [
-				{
-					"type": "text",
-					"text": "Severity"
-				},
-				...
-			],
-			"rows": [
-			]
-	]
-}
-*/
-
 type data struct {
 	Label string `json:"label"`
 	Value int    `json:"value"`
@@ -73,10 +32,11 @@ type element struct {
 type markup struct {
 	Version  int       `json:"version"`
 	Title    string    `json:"title"`
-	Elements []element `json:"elements"`
+	Elements []element `json:"elements,omitempty"`
 }
 
 func (f *InfraboxFormatter) Format(comments []gotodo.Comment) {
+	// TODO(daniel) These shouldn't be hardcoded!
 	output := map[string][]gotodo.Comment{
 		"FIXME": []gotodo.Comment{},
 		"TODO":  []gotodo.Comment{},
@@ -90,6 +50,12 @@ func (f *InfraboxFormatter) Format(comments []gotodo.Comment) {
 	infra := markup{
 		Version: 1,
 		Title:   "Todo",
+		Elements: []element{
+			element{
+				Type: "h1",
+				Text: fmt.Sprintf("FIXME: %02d / TODO: %02d / NOTE: %02d", len(output["FIXME"]), len(output["TODO"]), len(output["NOTE"])),
+			},
+		},
 	}
 
 	for tag, comments := range output {
@@ -97,6 +63,10 @@ func (f *InfraboxFormatter) Format(comments []gotodo.Comment) {
 		if count > 0 {
 			rows := [][]element{}
 			for _, comment := range comments {
+				if comment.Assignee == "" {
+					comment.Assignee = "-"
+				}
+
 				rows = append(rows, []element{
 					element{
 						Type: "text",
@@ -110,6 +80,7 @@ func (f *InfraboxFormatter) Format(comments []gotodo.Comment) {
 						Type: "text",
 						Text: strings.Join(comment.Text, "<br/>\n"),
 					},
+					// TODO(daniel) Consider config.ContextLines
 					element{
 						Type: "text",
 						Text: "<pre>" + strings.Join(comment.Context, "\n") + "</pre>",
